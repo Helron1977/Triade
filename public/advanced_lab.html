@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Triade Scientific Lab - V2 (Advanced)</title>
+    <style>
+        body {
+            margin: 0;
+            background: #0b1120;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            color: #0df;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        canvas {
+            image-rendering: pixelated;
+            z-index: 1;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 221, 255, 0.2);
+            border: 1px solid rgba(0, 221, 255, 0.2);
+        }
+
+        #ui {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 2;
+            pointer-events: none;
+            background: rgba(10, 15, 30, 0.85);
+            padding: 15px;
+            border: 1px solid rgba(0, 221, 255, 0.4);
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 221, 255, 0.1);
+            backdrop-filter: blur(4px);
+            width: 320px;
+        }
+
+        .header {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            color: #fff;
+            letter-spacing: 1px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 8px;
+        }
+
+        .metric {
+            margin-bottom: 6px;
+            font-size: 0.9em;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .value {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .warning {
+            color: #f00 !important;
+            text-shadow: 0 0 5px #f00;
+        }
+
+        .info {
+            margin-top: 12px;
+            font-size: 0.8em;
+            color: #7ab;
+            line-height: 1.4;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 8px;
+        }
+
+        .feature {
+            display: inline-block;
+            padding: 2px 6px;
+            background: rgba(0, 221, 255, 0.15);
+            border-radius: 4px;
+            border: 1px solid rgba(0, 221, 255, 0.3);
+            margin-top: 4px;
+            margin-right: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <div class="header">Triade Lab V2</div>
+        <div class="metric">Énergie globale: <span id="val-energy" class="value">0.000000</span></div>
+        <div class="metric">Monitoring CFL (U max): <span id="val-cfl" class="value">0.00</span></div>
+        <div class="metric">BGK Tau Adaptatif: <span id="val-tau" class="value">0.600</span></div>
+        <div class="metric">Statut: <span id="val-status" class="value" style="color:#0f0">STABLE</span></div>
+        <div class="info">
+            <div class="feature">Multi-cube spatial</div>
+            <div class="feature">Vortex forcing contrôlé</div>
+            <div class="feature">Filtre BGK (Smagorinsky)</div>
+            <div class="feature">Moniteur CFL</div>
+            <div class="feature">Turbulence synthétique</div>
+        </div>
+        <div class="info" style="color:#0df; font-weight: bold; border: none;">
+            [ Action: Bougez la souris pour Forcing Vortex ]
+        </div>
+    </div>
+    <canvas id="c"></canvas>
+    <script>
+
+        /* =========================
+           PARAMETERS (LAB MODE V2)
+        ========================= */
+
+        const PARAMS = {
+            size: 256,
+            tau_0: 0.8, // More viscous for stability
+            smagorinsky: 0.2,
+            injectionVelocity: 0.0,
+            cflLimit: 0.38,
+            syntheticTurbulence: 0.0,
+            bioDiffusion: 0.05,
+            bioGrowth: 0.0005, // Much slower growth to prevent 'green explosion'
+            vortexRadius: 28,
+            vortexStrength: 0.02
+        };
+
+        const STATS = {
+            energy: 0,
+            maxU: 0,
+            avgTau: 0
+        };
+
+        // Global for external referencing easily
+        let LAB = {
+            mouseX: 128, mouseY: 128,
+            mouseActive: false
+        };
+
+        /* =========================
+           MASTER BUFFER
+        ========================= */
+
+        class Master {
+            constructor(size, faces) {
+                this.size = size;
+                this.area = size * size;
+                this.faces = new Array(faces);
+                for (let i = 0; i < faces; i++)
+                    this.faces[i] = new Float32Array(this.area);
+            }
+        }
+
+        /* =========================
+           ADVANCED LBM (BGK ADAPTIVE + FORCING + CFL)
+        ========================= */
+
+        class AdvancedLBM {
+
+            constructor(master) {
+                this.m = master;
+                this.size = master.size;
+                this.area = master.area;
+
+                this.w = [4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 36, 1 / 36, 1 / 36, 1 / 36];
+                this.cx = [0, 1, 0, -1, 0, 1, -1, -1, 1];
+                this.cy = [0, 0, 1, 0, -1, 1, 1, -1, -1];
+                this.opp = [0, 3, 4, 1, 2, 7, 8, 5, 6];
+                this.feq_cache = new Float32Array(9);
+                this.pulled_f = new Float32Array(9); // Pre-allocated to avoid GC lag
+            }
+
+            step() {
+
+                const size = this.size;
+                const m = this.m.faces;
+
+                const rho = m[20], ux = m[18], uy = m[19], obst = m[22], turbMode = m[23];
+
+                let maxU = 0;
+                let sumTau = 0;
+                let activeCells = 0;
+
+                // 0. CLEAR NEXT FRAME BUFFERS (PREVENT GHOST MASS/NAN PROPAGATION)
+                for (let k = 0; k < 9; k++) m[k + 9].fill(0);
+
+                // (Injection logic shifted to Open Boundary Conditions after Swap)
+                let mx = LAB.mouseX, my = LAB.mouseY, isForcing = LAB.mouseActive;
+                let vr2 = PARAMS.vortexRadius * PARAMS.vortexRadius;
+
+                // 3. FULLY PERIODIC PULL-STREAMING & COLLISION (BGK Adaptative)
+                for (let y = 0; y < size; y++) {
+                    for (let x = 0; x < size; x++) {
+
+                        let i = y * size + x;
+
+                        if (obst[i] > 0.5) {
+                            for (let k = 0; k < 9; k++) m[k + 9][i] = this.w[k];
+                            continue;
+                        }
+
+                        // --- PULL STREAMING ---
+                        let r = 0, vx = 0, vy = 0;
+
+                        for (let k = 0; k < 9; k++) {
+                            // Where did this particle come from? (Opposite direction)
+                            let nx = x - this.cx[k];
+                            let ny = y - this.cy[k];
+
+                            // Walls bounce them back
+                            if (nx <= 0 || nx >= size - 1 || ny <= 0 || ny >= size - 1) {
+                                this.pulled_f[k] = m[this.opp[k]][i];
+                            } else {
+                                let ni = ny * size + nx;
+                                if (obst[ni] > 0.5) {
+                                    this.pulled_f[k] = m[this.opp[k]][i]; // Bounce from internal obstacle
+                                } else {
+                                    this.pulled_f[k] = m[k][ni]; // Normal pull
+                                }
+                            }
+
+                            r += this.pulled_f[k];
+                            vx += this.pulled_f[k] * this.cx[k];
+                            vy += this.pulled_f[k] * this.cy[k];
+                        }
+
+                        // Macroscopic clamping (Density & Velocity)
+                        let isShockwave = false;
+                        if (r < 0.8) { r = 0.8; isShockwave = true; }
+                        else if (r > 1.2) { r = 1.2; isShockwave = true; }
+                        else if (r < 0.0001) r = 0.0001;
+
+                        vx /= r;
+                        vy /= r;
+
+                        // Controlled Vortex Forcing (Shan-Chen style shift)
+                        if (isForcing) {
+                            let dx = x - mx;
+                            let dy = y - my;
+                            let dist2 = dx * dx + dy * dy;
+                            if (dist2 < vr2) {
+                                let force = PARAMS.vortexStrength * (1.0 - Math.sqrt(dist2) / PARAMS.vortexRadius);
+                                vx += -dy * force;
+                                vy += dx * force;
+                            }
+                        }
+
+                        let v2 = vx * vx + vy * vy;
+                        let speed = Math.sqrt(v2);
+
+                        if (speed > maxU) maxU = speed;
+
+                        let u2_clamped = v2;
+                        if (speed > PARAMS.cflLimit) {
+                            let scale = PARAMS.cflLimit / speed;
+                            vx *= scale;
+                            vy *= scale;
+                            u2_clamped = vx * vx + vy * vy;
+                            isShockwave = true;
+                        }
+
+                        // Write Safe Macros to Buffer 18-20
+                        rho[i] = r;
+                        ux[i] = vx;
+                        uy[i] = vy;
+
+                        // --- COLLISION ---
+                        if (isShockwave) {
+                            for (let k = 0; k < 9; k++) {
+                                let cu = 3 * (this.cx[k] * vx + this.cy[k] * vy);
+                                m[k + 9][i] = this.w[k] * r * (1 + cu + 0.5 * cu * cu - 1.5 * u2_clamped);
+                            }
+                        } else {
+                            let Pxx = 0, Pyy = 0, Pxy = 0;
+
+                            for (let k = 0; k < 9; k++) {
+                                let cu = 3 * (this.cx[k] * vx + this.cy[k] * vy);
+                                this.feq_cache[k] = this.w[k] * r * (1 + cu + 0.5 * cu * cu - 1.5 * u2_clamped);
+
+                                let fneq = this.pulled_f[k] - this.feq_cache[k];
+                                Pxx += fneq * this.cx[k] * this.cx[k];
+                                Pyy += fneq * this.cy[k] * this.cy[k];
+                                Pxy += fneq * this.cx[k] * this.cy[k];
+                            }
+
+                            let S_norm = Math.sqrt(2 * (Pxx * Pxx + Pyy * Pyy + 2 * Pxy * Pxy));
+                            let tau_eff = PARAMS.tau_0 + PARAMS.smagorinsky * S_norm;
+                            if (isNaN(tau_eff) || tau_eff < 0.505) tau_eff = 0.505;
+
+                            sumTau += tau_eff;
+                            activeCells++;
+
+                            for (let k = 0; k < 9; k++) {
+                                m[k + 9][i] = this.pulled_f[k] - (this.pulled_f[k] - this.feq_cache[k]) / tau_eff;
+                            }
+                        }
+                    }
+                }
+
+                if (activeCells > 0) STATS.avgTau = sumTau / activeCells;
+
+                // 4. MEMORY SWAP
+                for (let k = 0; k < 9; k++) {
+                    let tmp = m[k];
+                    m[k] = m[k + 9];
+                    m[k + 9] = tmp;
+                }
+            }
+        }
+
+        /* =========================
+           BIO REACTION DIFFUSION
+        ========================= */
+
+        class Bio {
+
+            constructor(master) {
+                this.m = master;
+                this.size = master.size;
+                this.area = master.area;
+            }
+
+            step() {
+
+                const size = this.size;
+                const bio = this.m.faces[21];
+                const bio_next = this.m.faces[17]; // Reuse LBM next-buffer for bio temp calculation
+                const obst = this.m.faces[22];
+
+                for (let y = 1; y < size - 1; y++) {
+                    for (let x = 1; x < size - 1; x++) {
+
+                        let i = y * size + x;
+
+                        let lap =
+                            bio[i - 1] + bio[i + 1] +
+                            bio[i - size] + bio[i + size] -
+                            4 * bio[i];
+
+                        let next =
+                            bio[i]
+                            + PARAMS.bioDiffusion * lap
+                            + PARAMS.bioGrowth * bio[i] * (1 - bio[i]);
+
+                        if (next < 0) next = 0;
+                        if (next > 1) next = 1;
+
+                        bio_next[i] = next;
+
+                        // Multi-Cube Spatial logic
+                        let isCube = false;
+                        if (x % 48 > 32 && x % 48 < 44 && y % 48 > 32 && y % 48 < 44 && x < 210 && x > 30) {
+                            isCube = true;
+                        }
+
+                        let isWall = (x <= 1 || x >= size - 2 || y <= 1 || y >= size - 2);
+                        obst[i] = (next > 0.85 || isCube || isWall) ? 1 : 0;
+                    }
+                }
+
+                // Jacobi update: Copy results back to main bio face
+                for (let i = 0; i < this.area; i++) bio[i] = bio_next[i];
+            }
+        }
+
+        /* =========================
+           ENERGY METRICS
+        ========================= */
+
+        function computeEnergy(master) {
+            const ux = master.faces[18];
+            const uy = master.faces[19];
+            let MathArea = master.area;
+            let E = 0;
+
+            for (let i = 0; i < MathArea; i++) E += ux[i] * ux[i] + uy[i] * uy[i];
+            STATS.energy = E / MathArea;
+        }
+
+        /* =========================
+           APP
+        ========================= */
+
+        class LabV2 {
+
+            constructor() {
+
+                const size = PARAMS.size;
+
+                this.canvas = document.getElementById("c");
+                this.ctx = this.canvas.getContext("2d");
+
+                // UI references
+                this.uiEnergy = document.getElementById("val-energy");
+                this.uiCfl = document.getElementById("val-cfl");
+                this.uiTau = document.getElementById("val-tau");
+                this.uiStatus = document.getElementById("val-status");
+
+                this.canvas.width = size;
+                this.canvas.height = size;
+                this.canvas.style.width = size * 3 + "px";   // zoomed for presentation
+                this.canvas.style.height = size * 3 + "px";
+
+                // Handle Mouse for Vortex Forcing
+                this.canvas.addEventListener('mousemove', (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    // Scale mouse pos relative to internal canvas size
+                    LAB.mouseX = (e.clientX - rect.left) / (rect.width / size);
+                    LAB.mouseY = (e.clientY - rect.top) / (rect.height / size);
+                    LAB.mouseActive = true;
+                });
+
+                this.canvas.addEventListener('mouseleave', () => {
+                    LAB.mouseActive = false;
+                });
+
+                this.master = new Master(size, 24);
+
+                const w = [4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 36, 1 / 36, 1 / 36, 1 / 36];
+
+                // init distributions to perfect rest equilibrium
+                for (let k = 0; k < 9; k++)
+                    for (let i = 0; i < this.master.area; i++)
+                        this.master.faces[k][i] = w[k];
+
+                // initial bio && Synthetic Mode buffer init
+                for (let i = 0; i < this.master.area; i++) {
+                    this.master.faces[21][i] = Math.random() * 0.2;
+                    this.master.faces[23][i] = Math.random(); // turb buffer
+                }
+
+                this.lbm = new AdvancedLBM(this.master);
+                this.bio = new Bio(this.master);
+
+                this.image = this.ctx.createImageData(size, size);
+
+                requestAnimationFrame(this.loop.bind(this));
+            }
+
+            loop() {
+
+                this.lbm.step();
+                this.bio.step();
+
+                this.render();
+
+                // 60FPS UI updating throttled
+                if (performance.now() % 100 < 16) {
+                    computeEnergy(this.master);
+                    this.uiEnergy.innerText = STATS.energy.toFixed(6);
+                    this.uiCfl.innerText = STATS.maxU.toFixed(3) + " / " + PARAMS.cflLimit.toFixed(2);
+                    this.uiTau.innerText = STATS.avgTau.toFixed(3);
+
+                    // Monitor Safety via CFL Limit
+                    let cflRatio = STATS.maxU / PARAMS.cflLimit;
+                    if (cflRatio >= 0.95) {
+                        this.uiStatus.innerText = "ALERTE CFL";
+                        this.uiStatus.className = "value warning";
+                    } else if (cflRatio >= 0.7) {
+                        this.uiStatus.innerText = "SOUS TENSION";
+                        this.uiStatus.style.color = "#ffaa00";
+                        this.uiStatus.className = "value";
+                    } else {
+                        this.uiStatus.innerText = "STABLE";
+                        this.uiStatus.style.color = "#0f0";
+                        this.uiStatus.className = "value";
+                    }
+                }
+
+                requestAnimationFrame(this.loop.bind(this));
+            }
+
+            render() {
+
+                const size = this.master.size;
+                const bio = this.master.faces[21];
+                const ux = this.master.faces[18];
+                const uy = this.master.faces[19];
+                const obst = this.master.faces[22];
+
+                const data = this.image.data;
+
+                for (let i = 0; i < this.master.area; i++) {
+
+                    let j = i * 4;
+
+                    if (obst[i] > 0.5) {
+                        // Multi-Cube / Obstacles render (Dark / Neon edge)
+                        data[j] = 20;
+                        data[j + 1] = 20;
+                        data[j + 2] = 40;
+                        data[j + 3] = 255;
+                    } else {
+                        let speed = Math.sqrt(ux[i] * ux[i] + uy[i] * uy[i]);
+                        let intensity = speed * 1200;
+
+                        let r = Math.min(255, bio[i] * 40 + intensity * 0.1);
+                        let g = Math.min(255, bio[i] * 120 + intensity * 0.4);
+                        let b = Math.min(255, intensity * 2.5 + 20);
+
+                        data[j] = r;
+                        data[j + 1] = g;
+                        data[j + 2] = b;
+                        data[j + 3] = 255;
+                    }
+                }
+
+                this.ctx.putImageData(this.image, 0, 0);
+
+                // Draw interaction area
+                if (LAB.mouseActive) {
+                    this.ctx.strokeStyle = "rgba(0, 221, 255, 0.4)";
+                    this.ctx.beginPath();
+                    this.ctx.arc(LAB.mouseX, LAB.mouseY, PARAMS.vortexRadius, 0, Math.PI * 2);
+                    this.ctx.stroke();
+                }
+            }
+        }
+
+        new LabV2();
+
+    </script>
+</body>
+
+</html>

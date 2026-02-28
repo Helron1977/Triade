@@ -1,0 +1,46 @@
+## Triade Engine V2 - AI Copilot Instructions
+
+You are acting as an AI Programming Assistant working inside the "Triade Engine V2" framework, a high-performance grid-based JavaScript simulation environment.
+Your primary goal is to write JavaScript/TypeScript that executes at maximum speed on the V8 Engine and avoids ANY Garbage Collection (GC) pauses.
+When the user asks you to implement an algorithm, a physics solver, or a logic update, YOU MUST strictly follow these architectural rules:
+
+### 1. The "Flat Tensor" Rule (Spatial Computing)
+- **Do NOT** use 2D/3D arrays like `let grid = [[]]`.
+- **Do NOT** instantiate new objects (`{ x, y, state }`) to represent cells or nodes.
+- **ALWAYS** treat space as a single contiguous block of 1D memory.
+- To access the 2D spatial coordinate `(x, y)` from a Flat Tensor `face` array of `mapSize` (N x N), use the explicit 1D index calculation:
+  ```typescript
+  const index = y * mapSize + x;
+  const value = face[index];
+  ```
+
+### 2. The Loop and Method Rule (No High-Level Iterators)
+- **Do NOT** use functional programming paradigms for traversing arrays inside loops (`forEach`, `map`, `reduce`, `filter`). These create function scopes and GC pressure.
+- **Do NOT** use `push`, `pop`, `splice`, or `slice` on Triade arrays. 
+- **ALWAYS** use standard `for` or `while` loops. Cache array lengths to avoid recomputation on every tick.
+  ```typescript
+  const length = mapSize * mapSize;
+  for (let i = 0; i < length; i++) {
+     // compute
+  }
+  ```
+
+### 3. The Zero Allocation Rule (The "Compute" Lifecycle)
+- The method `compute()` on `ITriadeEngine` is called at 60 FPS (or faster).
+- **Do NOT** declare `new Float32Array()`, `new Array()`, or `new Object()` inside the `compute()` function or inside the inner `for` loops.
+- If an algorithm requires a "scratchpad" or "cache" to store intermediate states (e.g., swapping buffers in Game of Life, LBM velocities), **pre-allocate it** inside the constructor of the specific Engine.
+
+### 4. Boilerplates (Creating a new Engine)
+When asked to create a new simulation or engine, copy the following structure structure (see `src/triade-engine-v2/templates/BlankEngine.ts`):
+1. Implement `ITriadeEngine`.
+2. Assume the input `faces: FlatTensorView[]` provides data arrays (e.g., Face 0 = Output/Current State).
+3. Always implement verbose error handling.
+
+### 5. AI-Friendly Verbose Error Handling
+- Triade applications crash silently if O(1) buffer bounds are exceeded.
+- If you write conditional logic where out-of-bounds might happen, or if you validate an implementation:
+- **ALWAYS** `throw new Error(...)` with extremely verbose explanations containing ALL relevant variable states so that YOU (the AI) can read the console log on the next turn and self-correct immediately.
+  - *Bad:* `throw new Error("Out of bounds")`
+  - *Good:* `throw new Error("[Triade LBM Engine] Memory access out of bounds during Streaming step. Accessing index ${index} on Face 3, but mapSize is ${mapSize} with total length ${length}. Check your dx/dy calculations for variable x=${x} y=${y}.")`
+
+By following these constraints, you ensure the user's project remains a pure O(1), memory-continuous, and 100% Client-Side scalable framework.

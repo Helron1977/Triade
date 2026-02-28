@@ -1,0 +1,70 @@
+.cube-scene {
+  width: 400px;
+  height: 400px;
+  perspective: 1500px;
+  margin: 0 auto;
+}
+
+.cube {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.05s linear;
+}
+
+.face {
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  background: rgba(15, 15, 25, 0.85); /* Glassmorphism background */
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  flex-direction: column;
+  padding: 15px;
+  box-sizing: border-box;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 0 30px rgba(0,0,0,0.8) inset;
+  border-radius: 8px; /* Slightly rounded for modern UI */
+}
+
+.face-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.face h4 {
+  margin: 0 0 10px 0;
+  text-align: center;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 5px rgba(255,255,255,0.5);
+}
+
+.face-front  { transform: rotateY(  0deg) translateZ(200px); }
+.face-back   { transform: rotateY(180deg) translateZ(200px); }
+.face-right  { transform: rotateY( 90deg) translateZ(200px); }
+.face-left   { transform: rotateY(-90deg) translateZ(200px); }
+.face-top    { transform: rotateX( 90deg) translateZ(200px); }
+.face-bottom { transform: rotateX(-90deg) translateZ(200px); }
+
+.grid-container {
+  flex: 1;
+  display: grid;
+  gap: 1px;
+  background-color: rgba(255,255,255,0.05);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cube-cell {
+  width: 100%;
+  height: 100%;
+  transition: background-color 0.2s ease;
+  border-radius: 1px;
+}

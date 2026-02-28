@@ -1,0 +1,290 @@
+.app-container {
+  height: 100vh;
+  width: 100vw;
+  position: relative;
+  overflow: hidden;
+  background-color: #0b0c10;
+  font-family: 'Inter', sans-serif;
+  color: #c5c6c7;
+}
+
+/* Surcharge Leaflet pour s'aligner sur notre Dark Mode */
+.leaflet-container {
+  background: #000 !important;
+}
+
+/* Permet au CanvasTriade de se superposer au pixel-près sur OSM */
+.triade-overlay {
+  image-rendering: auto;
+  /* Lisse la heatmap sans pixellisation */
+}
+
+/* LOADING STATE */
+.loading-screen {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24px;
+  color: #66fcf1;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  background-color: #0b0c10;
+}
+
+.loading-screen h3 {
+  animation: pulse 1s infinite alternate;
+}
+
+@keyframes pulse {
+  from {
+    opacity: 0.4;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* =========================================
+   Panneau SaaS Flottant (Glassmorphism)
+========================================= */
+.floating-ui-panel {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 380px;
+  z-index: 1000;
+  /* Leaflet UI est z-index ~400 */
+  background: rgba(15, 15, 25, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(102, 252, 241, 0.3);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.panel-header h1 {
+  margin: 0;
+  font-size: 22px;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+}
+
+.panel-header p {
+  margin: 5px 0 0 0;
+  font-size: 13px;
+  color: #8899aa;
+}
+
+.badge {
+  background: linear-gradient(90deg, #66fcf1, #45a29e);
+  color: #0b0c10;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-left: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.panel-section h3 {
+  font-size: 14px;
+  color: #66fcf1;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+  margin-top: 0;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Toggles & Checkboxes */
+.layer-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.layer-toggles label {
+  font-size: 13px;
+  color: #8899aa;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.layer-toggles label:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.layer-toggles label.active {
+  color: #ffffff;
+  background: rgba(102, 252, 241, 0.1);
+  border-color: rgba(102, 252, 241, 0.3);
+}
+
+.layer-toggles input {
+  margin-right: 12px;
+  accent-color: #66fcf1;
+  width: 16px;
+  height: 16px;
+}
+
+/* Sliders O(1) */
+.slider-box {
+  display: flex;
+  flex-direction: column;
+  color: #c5c6c7;
+  font-size: 13px;
+  margin-bottom: 15px;
+  font-weight: 600;
+}
+
+.slider-box:last-child {
+  margin-bottom: 0;
+}
+
+.slider-box label {
+  margin-bottom: 8px;
+}
+
+.slider-box input[type="range"] {
+  width: 100%;
+  accent-color: #ff3366;
+}
+
+/* Performance Metrics Footer */
+.panel-footer {
+  margin-top: 10px;
+}
+
+.metric-box {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #45a29e;
+  padding: 12px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.box-perf {
+  border-color: #ff3366;
+  box-shadow: 0 0 15px rgba(255, 51, 102, 0.2);
+}
+
+.box-perf .metric-val {
+  display: block;
+  font-size: 24px;
+  font-weight: 900;
+  color: #ff3366;
+  text-shadow: 0 0 10px rgba(255, 51, 102, 0.5);
+}
+
+.metric-lbl {
+  font-size: 11px;
+  color: #8899aa;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* =========================================
+   V5 CSS: Layer Controls 
+========================================= */
+
+.scrollable-section {
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.scrollable-section::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollable-section::-webkit-scrollbar-thumb {
+  background: #45a29e;
+  border-radius: 3px;
+}
+
+/* Layer Cards */
+.layer-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 12px;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.layer-card.active {
+  background: rgba(102, 252, 241, 0.05);
+  border-color: rgba(102, 252, 241, 0.2);
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  color: #c5c6c7;
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 0px;
+  /* If no details */
+}
+
+.layer-card.active .toggle-label {
+  margin-bottom: 8px;
+}
+
+.toggle-label input[type="checkbox"] {
+  margin-right: 12px;
+  accent-color: #66fcf1;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.layer-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-left: 28px;
+  border-top: 1px dotted rgba(255, 255, 255, 0.1);
+  padding-top: 10px;
+  margin-top: 4px;
+}
+
+.mini-slider {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  color: #8899aa;
+  font-weight: 500;
+}
+
+.mini-slider span {
+  margin-bottom: 6px;
+}
+
+.mini-slider input[type="range"] {
+  width: 100%;
+  accent-color: #ff3366;
+  height: 6px;
+  cursor: grab;
+}
+
+.mini-slider input[type="range"]:active {
+  cursor: grabbing;
+}
