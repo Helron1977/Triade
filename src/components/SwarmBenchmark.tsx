@@ -9,8 +9,11 @@ interface Particle {
     speed: number;
 }
 
-const MAP_SIZE = 512;
-const PARTICLE_COUNT = 8000;
+const CHUNK_SIZE = 512;
+const COLS = 2;
+const ROWS = 2;
+const TOTAL_SIZE = CHUNK_SIZE * COLS;
+const PARTICLE_COUNT = 15000;
 
 export const SwarmBenchmark: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -20,23 +23,22 @@ export const SwarmBenchmark: React.FC<{ onClose: () => void }> = ({ onClose }) =
     const masterRef = useRef<HypercubeMasterBuffer | null>(null);
     const gridRef = useRef<HypercubeGrid | null>(null);
     const particlesRef = useRef<Particle[]>([]);
-    const targetRef = useRef({ x: MAP_SIZE / 2, y: MAP_SIZE / 2 });
+    const targetRef = useRef({ x: TOTAL_SIZE / 2, y: TOTAL_SIZE / 2 });
 
     useEffect(() => {
         const master = new HypercubeMasterBuffer();
         masterRef.current = master;
 
         // CRITICAL: isPeriodic = false (the 7th parameter) to stop the grid from syncing boundaries.
-        const grid = new HypercubeGrid(1, 1, MAP_SIZE, master, () => new FlowFieldEngine(30), 6, false);
+        // 2x2 grid of 512x512 chunks = 1024x1024
+        const grid = new HypercubeGrid(COLS, ROWS, CHUNK_SIZE, master, () => new FlowFieldEngine(30), 6, false);
         gridRef.current = grid;
-        const cube = grid.cubes[0][0]!;
-        cube.faces[0].fill(1.0);
 
         const initialParticles: Particle[] = [];
         for (let i = 0; i < PARTICLE_COUNT; i++) {
             initialParticles.push({
-                x: Math.random() * MAP_SIZE,
-                y: Math.random() * MAP_SIZE,
+                x: Math.random() * TOTAL_SIZE,
+                y: Math.random() * TOTAL_SIZE,
                 vx: (Math.random() - 0.5) * 2,
                 vy: (Math.random() - 0.5) * 2,
                 speed: 1.0 + Math.random() * 0.5
@@ -50,39 +52,53 @@ export const SwarmBenchmark: React.FC<{ onClose: () => void }> = ({ onClose }) =
 
         const loop = async () => {
             const s = performance.now();
-            if (!cube || !grid) return;
+            if (!grid) return;
 
-            // Target Update (Face 2)
-            const targetFace = cube.faces[1];
-            targetFace.fill(1.0);
-            const tx = Math.floor(targetRef.current.x);
-            const ty = Math.floor(targetRef.current.y);
-            if (tx >= 0 && tx < MAP_SIZE && ty >= 0 && ty < MAP_SIZE) {
-                targetFace[ty * MAP_SIZE + tx] = 0.0;
+            // Update target globally for all chunks
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    const engine = grid.cubes[y][x]?.engine as any;
+                    if (engine) {
+                        engine.targetX = targetRef.current.x;
+                        engine.targetY = targetRef.current.y;
+                    }
+                }
             }
 
-            // Engine Compute (V12 Pure Analytical Well)
+            // Engine Compute
+            // Note: NO boundary sync ([3, 4]) because FlowFieldEngine is pure analytical Euclidean space
             await grid.compute();
             const computeEnd = performance.now();
 
             // Physics (Bilinear Sampling)
-            const f4 = cube.faces[3]; // Force X
-            const f5 = cube.faces[4]; // Force Y
-
             for (const p of particlesRef.current) {
-                // Bilinear lookup
-                const x1 = Math.floor(p.x);
-                const y1 = Math.floor(p.y);
-                const x2 = x1 >= MAP_SIZE - 1 ? x1 : x1 + 1;
-                const y2 = y1 >= MAP_SIZE - 1 ? y1 : y1 + 1;
-                const weightX = p.x - x1;
-                const weightY = p.y - y1;
+                // Bilinear lookup on the correct chunk
+                const cx = Math.floor(p.x / CHUNK_SIZE);
+                const cy = Math.floor(p.y / CHUNK_SIZE);
+
+                if (cx < 0 || cx >= COLS || cy < 0 || cy >= ROWS) {
+                    // Wrap if needed but here we clamp
+                    p.x = Math.max(0, Math.min(TOTAL_SIZE - 1, p.x));
+                    p.y = Math.max(0, Math.min(TOTAL_SIZE - 1, p.y));
+                    continue;
+                }
+
+                const cube = grid.cubes[cy][cx]!;
+                const f4 = cube.faces[3];
+                const f5 = cube.faces[4];
+
+                const lx = p.x % CHUNK_SIZE;
+                const ly = p.y % CHUNK_SIZE;
+
+                const x1 = Math.floor(lx);
+                const y1 = Math.floor(ly);
+                const x2 = x1 >= CHUNK_SIZE - 1 ? x1 : x1 + 1;
+                const y2 = y1 >= CHUNK_SIZE - 1 ? y1 : y1 + 1;
+                const weightX = lx - x1;
+                const weightY = ly - y1;
 
                 const getVec = (ix: number, iy: number) => {
-                    // Safe lookup (no wrap)
-                    const bx = Math.max(0, Math.min(MAP_SIZE - 1, ix));
-                    const by = Math.max(0, Math.min(MAP_SIZE - 1, iy));
-                    const bIdx = by * MAP_SIZE + bx;
+                    const bIdx = iy * CHUNK_SIZE + ix;
                     return { x: f4[bIdx] || 0, y: f5[bIdx] || 0 };
                 };
 
@@ -104,11 +120,11 @@ export const SwarmBenchmark: React.FC<{ onClose: () => void }> = ({ onClose }) =
                 p.vx *= 0.85;
                 p.vy *= 0.85;
 
-                // Clamping to map boundaries (no wrap-around)
+                // Clamping to global boundaries
                 if (p.x < 0) { p.x = 0; p.vx *= -0.5; }
-                if (p.x >= MAP_SIZE) { p.x = MAP_SIZE - 1; p.vx *= -0.5; }
+                if (p.x >= TOTAL_SIZE) { p.x = TOTAL_SIZE - 1; p.vx *= -0.5; }
                 if (p.y < 0) { p.y = 0; p.vy *= -0.5; }
-                if (p.y >= MAP_SIZE) { p.y = MAP_SIZE - 1; p.vy *= -0.5; }
+                if (p.y >= TOTAL_SIZE) { p.y = TOTAL_SIZE - 1; p.vy *= -0.5; }
             }
 
             // Rendering
@@ -117,7 +133,7 @@ export const SwarmBenchmark: React.FC<{ onClose: () => void }> = ({ onClose }) =
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
                 ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
                 ctx.fillStyle = '#60a5fa';
-                const scale = canvasRef.current.width / MAP_SIZE;
+                const scale = canvasRef.current.width / TOTAL_SIZE;
                 for (const p of particlesRef.current) {
                     ctx.fillRect(p.x * scale, p.y * scale, 1.5, 1.5);
                 }
@@ -125,14 +141,29 @@ export const SwarmBenchmark: React.FC<{ onClose: () => void }> = ({ onClose }) =
 
             if (debugCanvasRef.current) {
                 const ctx = debugCanvasRef.current.getContext('2d')!;
-                const f3 = cube.faces[2];
-                const imgData = ctx.createImageData(MAP_SIZE, MAP_SIZE);
-                for (let i = 0; i < f3.length; i++) {
-                    const v = (f3[i] * 5) % 255;
-                    imgData.data[i * 4 + 0] = v;
-                    imgData.data[i * 4 + 1] = 255 - v;
-                    imgData.data[i * 4 + 2] = 100;
-                    imgData.data[i * 4 + 3] = 255;
+                const imgData = ctx.createImageData(TOTAL_SIZE, TOTAL_SIZE);
+
+                for (let cy = 0; cy < ROWS; cy++) {
+                    for (let cx = 0; cx < COLS; cx++) {
+                        const f3 = grid.cubes[cy][cx]!.faces[2];
+                        const startX = cx * CHUNK_SIZE;
+                        const startY = cy * CHUNK_SIZE;
+
+                        for (let y = 0; y < CHUNK_SIZE; y++) {
+                            const globalY = startY + y;
+                            for (let x = 0; x < CHUNK_SIZE; x++) {
+                                const globalX = startX + x;
+                                const val = f3[y * CHUNK_SIZE + x];
+                                const v = (val * 0.5) % 255; // Reduced scale to remove banding
+
+                                const i = (globalY * TOTAL_SIZE + globalX) * 4;
+                                imgData.data[i + 0] = v;
+                                imgData.data[i + 1] = 255 - v;
+                                imgData.data[i + 2] = 100;
+                                imgData.data[i + 3] = 255;
+                            }
+                        }
+                    }
                 }
                 ctx.putImageData(imgData, 0, 0);
             }
@@ -154,8 +185,8 @@ export const SwarmBenchmark: React.FC<{ onClose: () => void }> = ({ onClose }) =
     const handleMouseMove = (e: React.MouseEvent) => {
         if (!canvasRef.current) return;
         const rect = canvasRef.current.getBoundingClientRect();
-        const x = ((e.clientX - rect.left) / rect.width) * MAP_SIZE;
-        const y = ((e.clientY - rect.top) / rect.height) * MAP_SIZE;
+        const x = ((e.clientX - rect.left) / rect.width) * TOTAL_SIZE;
+        const y = ((e.clientY - rect.top) / rect.height) * TOTAL_SIZE;
         targetRef.current = { x, y };
     };
 
@@ -174,21 +205,21 @@ export const SwarmBenchmark: React.FC<{ onClose: () => void }> = ({ onClose }) =
 
             <main style={{ flex: 1, display: 'flex', gap: '40px', padding: '40px', alignItems: 'center', justifyContent: 'center' }}>
                 <div style={{ textAlign: 'center' }}>
-                    <div style={{ marginBottom: '15px', color: '#aaa', fontSize: '12px' }}>UNIFIED SIMULATION (512x512)</div>
+                    <div style={{ marginBottom: '15px', color: '#aaa', fontSize: '12px' }}>UNIFIED SIMULATION (1024x1024)</div>
                     <canvas
                         ref={canvasRef}
-                        width={MAP_SIZE}
-                        height={MAP_SIZE}
+                        width={TOTAL_SIZE}
+                        height={TOTAL_SIZE}
                         onMouseMove={handleMouseMove}
                         style={{ width: '60vh', height: '60vh', backgroundColor: '#050505', borderRadius: '12px', cursor: 'crosshair', border: '1px solid #222', boxShadow: '0 0 40px rgba(96, 165, 250, 0.15)' }}
                     />
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                    <div style={{ marginBottom: '15px', color: '#aaa', fontSize: '12px' }}>GRAVITY WELL (SINGLE 1:1)</div>
+                    <div style={{ marginBottom: '15px', color: '#aaa', fontSize: '12px' }}>GRAVITY WELL (ALL CHUNKS)</div>
                     <canvas
                         ref={debugCanvasRef}
-                        width={MAP_SIZE}
-                        height={MAP_SIZE}
+                        width={TOTAL_SIZE}
+                        height={TOTAL_SIZE}
                         style={{ width: '40vh', height: '40vh', backgroundColor: '#000', borderRadius: '12px', border: '1px solid #f87171' }}
                     />
                 </div>

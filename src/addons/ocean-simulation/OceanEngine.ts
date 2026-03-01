@@ -11,7 +11,13 @@ export interface OceanEngineParams {
 }
 
 export class OceanEngine implements IHypercubeEngine {
-    public readonly name = "OceanEngine";
+    public get name(): string {
+        return "OceanEngine";
+    }
+
+    public getRequiredFaces(): number {
+        return 23; // 9(f) + 9(f_post) + 1(ux) + 1(uy) + 1(rho) + 1(bio) + 1(obst)
+    }
 
     // Re-use lab-perfect constants
     private readonly w = [4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 36, 1 / 36, 1 / 36, 1 / 36];

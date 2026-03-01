@@ -40,7 +40,7 @@ export class OceanWorld {
         this.reset();
     }
 
-    public reset() {
+    public async reset() {
         const w = [4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 36, 1 / 36, 1 / 36, 1 / 36];
 
         // Reset distributions and macros
@@ -88,18 +88,18 @@ export class OceanWorld {
         }
 
         // Force sync once
-        this.grid.compute([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22]);
+        await this.grid.compute([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22]);
     }
 
     public addBoat(globalX: number, globalY: number, length: number = 20) {
         this.boats.push({ x: globalX, y: globalY, vx: 0, vy: 0, length, angle: 0 });
     }
 
-    public step() {
+    public async step() {
         // 1. Math Step for all chunks + Boundary Exchange
         // Synchronize LBM distributions [0..8], Bio data [21], AND Macros [18, 19, 20]
         // Syncing Macros ensures the Boat doesn't read 0 velocity exactly on the boundary cell!
-        this.grid.compute([0, 1, 2, 3, 4, 5, 6, 7, 8, 18, 19, 20, 21]);
+        await this.grid.compute([0, 1, 2, 3, 4, 5, 6, 7, 8, 18, 19, 20, 21]);
 
         // 2. Global Boat Physics
         for (const boat of this.boats) {

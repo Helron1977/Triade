@@ -38,6 +38,15 @@ export const MinimalLBMTest: React.FC<{ onClose: () => void }> = ({ onClose }) =
                 }
             }
 
+            // Initialisation physique (f_eq) via un premier compute CPU fictif si besoin
+            // ou laisser l'engine le faire au premier compute.
+            // En mode GPU, on force un premier compute CPU pour initialiser le MasterBuffer
+            if (gpuMode) {
+                const engine = cube.engine as AerodynamicsEngine;
+                engine.compute(cube.faces, MAP_SIZE); // Initialise feq dans MasterBuffer
+                await cube.syncFromHost(); // Upload vers VRAM
+            }
+
             let lastTime = performance.now();
             let frames = 0;
 
@@ -49,6 +58,11 @@ export const MinimalLBMTest: React.FC<{ onClose: () => void }> = ({ onClose }) =
                 await grid.compute();
                 await grid.compute();
                 await grid.compute();
+
+                // Synchronisation VRAM -> RAM si mode GPU pour affichage
+                if (gpuMode && cube) {
+                    await cube.syncToHost();
+                }
 
                 const e = performance.now();
 

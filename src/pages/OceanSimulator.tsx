@@ -20,127 +20,7 @@ export const OceanSimulator = () => {
     const rendererRef = useRef<OceanWebGLRenderer | null>(null);
 
     useEffect(() => {
-        // Initialization (Larger Map: 4x4 chunks)
-        const master = new HypercubeMasterBuffer();
-        masterRef.current = master;
-
-        const size = 64;
-        const cols = 4;
-        const rows = 4;
-
-        const world = new OceanWorld(master, cols, rows, size);
-        worldRef.current = world;
-
-        if (webglCanvasRef.current) {
-            rendererRef.current = new OceanWebGLRenderer(webglCanvasRef.current, cols, rows, size);
-        }
-
-        world.setVortexParams(vortexStrength, vortexRadius);
-
-        // Placer 1 bateau pour focus sur sa physique
-        const globalW = cols * size;
-        const globalH = rows * size;
-        world.addBoat(10, 10, 10);
-
-        let frameCount = 0;
-        let lastTime = performance.now();
         let raf: number;
-
-        const loop = () => {
-            // Un seul step global pour toute la Grille + Bateaux Torique
-            world.step();
-
-            // RENDER CUBES
-            for (let y = 0; y < rows; y++) {
-                for (let x = 0; x < cols; x++) {
-                    const ctx = canvasGridRefs[y * cols + x].current?.getContext('2d');
-                    if (ctx) {
-                        const imgData = ctx.createImageData(size, size);
-                        world.renderChunk(x, y, ctx, imgData);
-                    }
-                }
-            }
-
-            // RENDER UNIFIED WEBGL
-            if (rendererRef.current) {
-                rendererRef.current.render(world.grid);
-            }
-
-            // RENDER UNIFIED BOATS (2D Overlay)
-            const bCtx = boatOverlayRef.current?.getContext('2d');
-            if (bCtx && worldRef.current) {
-                bCtx.clearRect(0, 0, globalW, globalH);
-                for (const boat of worldRef.current.boats) {
-
-                    // -- 3D PROJECTION MATCHING WEBGL SHADER --
-                    const nx = (boat.x / 256.0) * 2.0 - 1.0;
-                    const ny = -(boat.y / 256.0) * 2.0 + 1.0;
-
-                    const angleX = -1.1; // Extrait du shader
-                    const cosX = Math.cos(angleX);
-                    const sinX = Math.sin(angleX);
-
-                    const yRot = ny * cosX; // h = 0 for boat base
-                    const zRot = ny * sinX - 2.2;
-
-                    const fov = 1.7;
-                    const clipX = nx * fov;
-                    const clipY = (yRot - 0.2) * fov;
-                    const w = -zRot;
-
-                    const ndcX = clipX / w;
-                    const ndcY = clipY / w;
-
-                    const projX = (ndcX * 0.5 + 0.5) * 256;
-                    const projY = (-ndcY * 0.5 + 0.5) * 256;
-                    const scale3D = 2.5 / w; // Ajustement d'échelle 
-
-                    bCtx.save();
-                    bCtx.translate(projX, projY);
-                    bCtx.scale(scale3D, scale3D);
-                    bCtx.rotate(boat.angle); // Flat rotation in screen space is ok for subtle tilted camera
-
-                    // Sillage (Wake)
-                    bCtx.beginPath();
-                    bCtx.moveTo(-boat.length / 2, 0);
-                    bCtx.lineTo(-boat.length * 1.5, -boat.length * 0.8);
-                    bCtx.lineTo(-boat.length * 1.5, boat.length * 0.8);
-                    bCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-                    bCtx.fill();
-
-                    // Bateau stylisé
-                    bCtx.beginPath();
-                    bCtx.moveTo(boat.length / 2, 0); // Proue
-                    bCtx.lineTo(-boat.length / 2, 4);  // Tribord
-                    bCtx.lineTo(-boat.length / 2, -4); // Bâbord
-                    bCtx.fillStyle = '#facc15'; // Yellow Hull
-                    bCtx.fill();
-
-                    // Voile blanche
-                    bCtx.beginPath();
-                    bCtx.moveTo(boat.length / 4, 0);
-                    bCtx.lineTo(-boat.length / 3, 0);
-                    bCtx.lineTo(-boat.length / 4, 8); // Voile gonflée
-                    bCtx.fillStyle = '#ffffff';
-                    bCtx.fill();
-
-                    bCtx.restore();
-                }
-            }
-
-            // FPS Counter
-            frameCount++;
-            const now = performance.now();
-            if (now - lastTime >= 1000) {
-                setFps(frameCount);
-                frameCount = 0;
-                lastTime = now;
-            }
-
-            raf = requestAnimationFrame(loop);
-        };
-
-        raf = requestAnimationFrame(loop);
 
         // Keyboard controls (Z/W, S, Q/A, D)
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -161,11 +41,80 @@ export const OceanSimulator = () => {
             if (key === 'd' || key === 'arrowright') worldRef.current.keys.right = false;
         };
 
+        const init = async () => {
+            const master = new HypercubeMasterBuffer();
+            masterRef.current = master;
+
+            const size = 64;
+            const cols = 4;
+            const rows = 4;
+
+            const world = new OceanWorld(master, cols, rows, size);
+            await world.reset();
+            worldRef.current = world;
+
+            if (webglCanvasRef.current) {
+                rendererRef.current = new OceanWebGLRenderer(webglCanvasRef.current, cols, rows, size);
+            }
+
+            world.setVortexParams(vortexStrength, vortexRadius);
+            world.addBoat(10, 10, 10);
+
+            let frameCount = 0;
+            let lastTime = performance.now();
+
+            const loop = async () => {
+                await world.step();
+
+                for (let y = 0; y < rows; y++) {
+                    for (let x = 0; x < cols; x++) {
+                        const ctx = canvasGridRefs[y * cols + x].current?.getContext('2d');
+                        if (ctx) {
+                            const imgData = ctx.createImageData(size, size);
+                            world.renderChunk(x, y, ctx, imgData);
+                        }
+                    }
+                }
+
+                if (rendererRef.current) rendererRef.current.render(world.grid);
+
+                const bCtx = boatOverlayRef.current?.getContext('2d');
+                if (bCtx && worldRef.current) {
+                    bCtx.clearRect(0, 0, cols * size, rows * size);
+                    for (const boat of worldRef.current.boats) {
+                        const nx = (boat.x / 256.0) * 2.0 - 1.0;
+                        const ny = -(boat.y / 256.0) * 2.0 + 1.0;
+                        const angleX = -1.1; const cosX = Math.cos(angleX); const sinX = Math.sin(angleX);
+                        const yRot = ny * cosX; const zRot = ny * sinX - 2.2;
+                        const fov = 1.7; const clipX = nx * fov; const clipY = (yRot - 0.2) * fov; const w = -zRot;
+                        const ndcX = clipX / w; const ndcY = clipY / w;
+                        const projX = (ndcX * 0.5 + 0.5) * 256; const projY = (-ndcY * 0.5 + 0.5) * 256;
+                        const scale3D = 2.5 / w;
+                        bCtx.save(); bCtx.translate(projX, projY); bCtx.scale(scale3D, scale3D); bCtx.rotate(boat.angle);
+                        bCtx.beginPath(); bCtx.moveTo(-boat.length / 2, 0); bCtx.lineTo(-boat.length * 1.5, -boat.length * 0.8); bCtx.lineTo(-boat.length * 1.5, boat.length * 0.8); bCtx.fillStyle = 'rgba(255, 255, 255, 0.4)'; bCtx.fill();
+                        bCtx.beginPath(); bCtx.moveTo(boat.length / 2, 0); bCtx.lineTo(-boat.length / 2, 4); bCtx.lineTo(-boat.length / 2, -4); bCtx.fillStyle = '#facc15'; bCtx.fill();
+                        bCtx.beginPath(); bCtx.moveTo(boat.length / 4, 0); bCtx.lineTo(-boat.length / 3, 0); bCtx.lineTo(-boat.length / 4, 8); bCtx.fillStyle = '#ffffff'; bCtx.fill();
+                        bCtx.restore();
+                    }
+                }
+
+                frameCount++;
+                if (performance.now() - lastTime >= 1000) {
+                    setFps(frameCount);
+                    frameCount = 0;
+                    lastTime = performance.now();
+                }
+                raf = requestAnimationFrame(loop);
+            };
+            raf = requestAnimationFrame(loop);
+        };
+
         window.addEventListener('keydown', handleKeyDown);
         window.addEventListener('keyup', handleKeyUp);
+        init();
 
         return () => {
-            cancelAnimationFrame(raf);
+            if (raf) cancelAnimationFrame(raf);
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
         };
