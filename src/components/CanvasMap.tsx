@@ -63,3 +63,5 @@ export const CanvasMap: React.FC<CanvasMapProps> = ({ data, width, height, color
         </div>
     );
 };
+
+

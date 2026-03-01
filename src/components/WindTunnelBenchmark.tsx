@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Triade } from '../triade-engine-v2/Triade';
-import { AerodynamicsEngine } from '../triade-engine-v2/engines/AerodynamicsEngine';
+import { HypercubeMasterBuffer, HypercubeGrid, AerodynamicsEngine } from 'hypercube-compute';
 
 const MAP_SIZE = 400; // 160 000 cellules (LBM D2Q9, 22 Faces = 14MB RAM)
 
@@ -14,7 +13,8 @@ export const WindTunnelBenchmark: React.FC<Props> = ({ onClose }) => {
     const [angle, setAngle] = useState(15);
     const [drag, setDrag] = useState(0);
     const frameId = useRef<number>(0);
-    const sdkRef = useRef<Triade | null>(null);
+    const masterRef = useRef<HypercubeMasterBuffer | null>(null);
+    const gridRef = useRef<HypercubeGrid | null>(null);
 
     const rasterizeProfile = (faces: Float32Array[], wingAngle: number) => {
         const canvas = document.createElement('canvas');
@@ -60,21 +60,16 @@ export const WindTunnelBenchmark: React.FC<Props> = ({ onClose }) => {
         const ctx = canvas.getContext('2d', { alpha: false });
         if (!ctx) return;
 
-        if (!sdkRef.current) {
-            sdkRef.current = new Triade(80);
+        if (!masterRef.current) {
+            masterRef.current = new HypercubeMasterBuffer();
+            // Créer une grille de 1x1 cube (MAP_SIZE, détection auto des faces, mode non-périodique (false) pour outlet)
+            gridRef.current = new HypercubeGrid(1, 1, MAP_SIZE, masterRef.current, () => new AerodynamicsEngine(), 6, false);
         }
-        const sdk = sdkRef.current;
-
-        let cube;
-        try {
-            // Demande 22 faces (D2Q9) : 9(f) + 9(f_next) + Obstacle + Ux + Uy + Curl
-            cube = sdk.createCube('WindTunnelLBM', MAP_SIZE, new AerodynamicsEngine(), 22);
-        } catch (e) {
-            cube = (sdk as any).cubes.get('WindTunnelLBM') || sdk.createCube('WindTunnelLBM2', MAP_SIZE, new AerodynamicsEngine(), 22);
-        }
+        const grid = gridRef.current!;
+        const cube = grid.cubes[0][0];
 
         // Première rasterisation de l'obstacle
-        rasterizeProfile(cube.faces, 15);
+        rasterizeProfile(cube!.faces, 15);
 
         const imgData = ctx.createImageData(MAP_SIZE, MAP_SIZE);
         const data = imgData.data;
@@ -87,13 +82,14 @@ export const WindTunnelBenchmark: React.FC<Props> = ({ onClose }) => {
             const startCompute = performance.now();
 
             // On tourne le LBM 3 fois par frame pour accélérer le visuel du vent (Sub-stepping O(1))
-            cube.compute();
-            cube.compute();
-            cube.compute();
+            grid.compute();
+            grid.compute();
+            grid.compute();
 
             const computeTime = performance.now() - startCompute;
             avgCompute = avgCompute * 0.9 + computeTime * 0.1;
 
+            const cube = grid.cubes[0][0]!;
             const obstacles = cube.faces[18];
             const curl = cube.faces[21]; // Face de Vorticité
             const engine = cube.engine as AerodynamicsEngine;
@@ -148,13 +144,9 @@ export const WindTunnelBenchmark: React.FC<Props> = ({ onClose }) => {
     const handleAngleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = parseInt(e.target.value);
         setAngle(val);
-        if (sdkRef.current) {
-            const iter = (sdkRef.current as any).cubes.values();
-            for (const cube of iter) {
-                if (cube.engine instanceof AerodynamicsEngine) {
-                    rasterizeProfile(cube.faces, val);
-                }
-            }
+        if (gridRef.current) {
+            const cube = gridRef.current.cubes[0][0]!;
+            rasterizeProfile(cube.faces, val);
         }
     };
 
@@ -191,7 +183,7 @@ export const WindTunnelBenchmark: React.FC<Props> = ({ onClose }) => {
                 </div>
 
                 <div style={{ fontSize: '11px', color: '#888', marginTop: '10px' }}>
-                    Rendu de <b>Vorticité (Curl)</b> : Rouge (Turbulence Horaire), Bleu (Anti-horaire). Le réseau Boltzmann relaxe 160,000 cellules 180 fois/sec sur un Tensor Triade 22-Faces.
+                    Rendu de <b>Vorticité (Curl)</b> : Rouge (Turbulence Horaire), Bleu (Anti-horaire). Le réseau Boltzmann relaxe 160,000 cellules 180 fois/sec sur un Tensor Hypercube 22-Faces.
                 </div>
 
                 <button onClick={onClose} style={{ padding: '10px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: '10px', fontWeight: 'bold' }}>
@@ -203,3 +195,5 @@ export const WindTunnelBenchmark: React.FC<Props> = ({ onClose }) => {
         </div>
     );
 };
+
+

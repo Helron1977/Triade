@@ -1,4 +1,4 @@
-import type { ITriadeEngine } from '../../engines/ITriadeEngine';
+import type { IHypercubeEngine } from 'hypercube-compute';
 
 export interface OceanEngineParams {
     tau_0: number;
@@ -10,7 +10,7 @@ export interface OceanEngineParams {
     vortexStrength: number;
 }
 
-export class OceanEngine implements ITriadeEngine {
+export class OceanEngine implements IHypercubeEngine {
     public readonly name = "OceanEngine";
 
     // Re-use lab-perfect constants
@@ -206,3 +206,5 @@ export class OceanEngine implements ITriadeEngine {
         for (let i = 0; i < area; i++) bio[i] = bio_next[i];
     }
 }
+
+

@@ -2,15 +2,17 @@ import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { GeoAnalyzer } from './pages/GeoAnalyzer';
 import { GOLBenchmark } from './components/GOLBenchmark';
 import { WindTunnelBenchmark } from './components/WindTunnelBenchmark';
-import { TriadeCubeLab } from './components/TriadeCubeLab';
+import { HypercubeLab } from './components/HypercubeLab';
 import { OceanSimulator } from './pages/OceanSimulator';
+import { SwarmBenchmark } from './components/SwarmBenchmark';
+import { MinimalLBMTest } from './components/MinimalLBMTest';
 import './App.css';
 
 function Hub() {
   return (
     <div style={{ backgroundColor: '#000', minHeight: '100vh', color: '#fff', padding: '40px', fontFamily: 'system-ui, sans-serif' }}>
       <header style={{ marginBottom: '40px', borderBottom: '1px solid #333', paddingBottom: '20px' }}>
-        <h1 style={{ fontSize: '36px', fontWeight: '900', color: '#f59e0b', margin: 0, letterSpacing: '-1px' }}>Triade Engine Hub</h1>
+        <h1 style={{ fontSize: '36px', fontWeight: '900', color: '#f59e0b', margin: 0, letterSpacing: '-1px' }}>Hypercube Engine Hub</h1>
         <p style={{ color: '#a3a3a3', marginTop: '10px' }}>Sélectionnez un démonstrateur mathématique (Flat Tensor O(1))</p>
       </header>
 
@@ -49,6 +51,13 @@ function Hub() {
           <div style={tagStyle('#a855f7')}>API DEVELOPPEUR</div>
           <h2 style={{ fontSize: '20px', margin: '10px 0', color: '#fff' }}>Standard d'Intégration</h2>
           <p style={{ color: '#a3a3a3', fontSize: '14px', lineHeight: '1.5' }}>Démonstrateur de l'API native (Multi-Cubes Grid, Canvas 2D, et Textures WebGL via pointeur direct).</p>
+        </Link>
+
+        {/* SWARM V3 */}
+        <Link to="/swarm" style={cardStyle('#4ade80', 'rgba(74, 222, 128, 0.1)')}>
+          <div style={tagStyle('#4ade80')}>IA & PATHFINDING V3</div>
+          <h2 style={{ fontSize: '20px', margin: '10px 0', color: '#fff' }}>Swarm Intelligence</h2>
+          <p style={{ color: '#a3a3a3', fontSize: '14px', lineHeight: '1.5' }}>Contrôle de 10 000+ agents via Flow-Field. Calcul de trajectoire global en O(1) grâce au champ vectoriel tensoriel.</p>
         </Link>
 
       </div>
@@ -102,7 +111,25 @@ function LabWrapper() {
   const nav = useNavigate();
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, right: 0, zIndex: 9999 }}>
-      <TriadeCubeLab onClose={() => nav('/')} />
+      <HypercubeLab onClose={() => nav('/')} />
+    </div>
+  );
+}
+
+function SwarmWrapper() {
+  const nav = useNavigate();
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, right: 0, zIndex: 9999 }}>
+      <SwarmBenchmark onClose={() => nav('/')} />
+    </div>
+  );
+}
+
+function MinimalLBMWrapper() {
+  const nav = useNavigate();
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, right: 0, zIndex: 9999 }}>
+      <MinimalLBMTest onClose={() => nav('/')} />
     </div>
   );
 }
@@ -116,8 +143,12 @@ function App() {
       <Route path="/ocean-simulator" element={<OceanSimulator />} />
       <Route path="/game-of-life" element={<GOLWrapper />} />
       <Route path="/lab" element={<LabWrapper />} />
+      <Route path="/swarm" element={<SwarmWrapper />} />
+      <Route path="/minimal-lbm" element={<MinimalLBMWrapper />} />
     </Routes>
   );
 }
 
 export default App;
+
+

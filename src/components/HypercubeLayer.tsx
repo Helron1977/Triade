@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { CanvasAdapter } from '../triade-engine-v2/io/CanvasAdapter';
+import { CanvasAdapter } from 'hypercube-compute';
 
-interface TriadeLayerV2Props {
+interface HypercubeLayerProps {
     faceData: Float32Array | null;
     mapSize: number;
     bounds: [[number, number], [number, number]];
@@ -11,7 +11,7 @@ interface TriadeLayerV2Props {
     opacity?: number;
 }
 
-export const TriadeLayerV2: React.FC<TriadeLayerV2Props> = ({ faceData, mapSize, bounds, colorScheme, opacity = 0.8 }) => {
+export const HypercubeLayer: React.FC<HypercubeLayerProps> = ({ faceData, mapSize, bounds, colorScheme, opacity = 0.8 }) => {
     const map = useMap();
     const canvasLayerRef = useRef<L.ImageOverlay | null>(null);
     const canvasEl = useRef<HTMLCanvasElement>(document.createElement('canvas'));
@@ -47,3 +47,5 @@ export const TriadeLayerV2: React.FC<TriadeLayerV2Props> = ({ faceData, mapSize,
 
     return null;
 };
+
+

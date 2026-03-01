@@ -13,8 +13,8 @@
   background: #000 !important;
 }
 
-/* Permet au CanvasTriade de se superposer au pixel-près sur OSM */
-.triade-overlay {
+/* Permet au CanvasHypercube de se superposer au pixel-près sur OSM */
+.Hypercube-overlay {
   image-rendering: auto;
   /* Lisse la heatmap sans pixellisation */
 }
@@ -288,3 +288,4 @@
 .mini-slider input[type="range"]:active {
   cursor: grabbing;
 }
+

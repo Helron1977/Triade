@@ -2,10 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Link } from 'react-router-dom';
-import { Triade } from '../triade-engine-v2/Triade';
-import { HeatmapEngine } from '../triade-engine-v2/engines/HeatmapEngine';
-import { TriadeLayerV2 } from '../components/TriadeLayerV2';
-import { TriadeCubeV2 } from '../triade-engine-v2/core/TriadeCubeV2';
+import { HypercubeMasterBuffer, HypercubeChunk, HypercubeGrid, HeatmapEngine } from 'hypercube-compute';
+import { HypercubeLayer } from '../components/HypercubeLayer';
 import '../App.css';
 
 const MAP_SIZE = 800; // Doit matcher process-geofabrik
@@ -19,13 +17,13 @@ interface LayerState {
   enabled: boolean;
   weight: number;
   radius: number;
-  cube?: TriadeCubeV2;
+  cube?: HypercubeChunk;
 }
 
 export function GeoAnalyzer() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ vram: '0', computeMs: 0 });
-  const sdk = useRef<Triade | null>(null);
+  const masterRef = useRef<HypercubeMasterBuffer | null>(null);
 
   // Notre State d'Urbanisme Multi-Critères
   const [layers, setLayers] = useState<Record<string, LayerState>>({
@@ -39,32 +37,34 @@ export function GeoAnalyzer() {
 
   useEffect(() => {
     async function boot() {
-      if (sdk.current) return;
-      // 1. Initialisation Master Buffer V2 (150 MB permet d'allouer au moins 10 cubes 800x800)
-      sdk.current = new Triade(150);
+      if (masterRef.current) return;
+      // 1. Initialisation Master Buffer V2 (150 MB pour multiples Grilles)
+      masterRef.current = new HypercubeMasterBuffer();
 
       // 2. Fetch Hyper-Rapide des Tenseurs Binaires (Data Pipeline Geofabrik)
-      const loadTensor = async (filename: string, engineName: string, radius: number): Promise<TriadeCubeV2> => {
+      const loadTensor = async (filename: string, radius: number): Promise<HypercubeChunk> => {
         try {
           const res = await fetch(`/data/${filename}.bin`);
           const arrayBuffer = await res.arrayBuffer();
           const floatData = new Float32Array(arrayBuffer);
 
-          // Création de l'Entité et mappage mémoire
-          const cube = sdk.current!.createCube(engineName, MAP_SIZE, new HeatmapEngine(radius));
+          // Création de l'Entité Grid 1x1 et mappage mémoire
+          const grid = new HypercubeGrid(1, 1, MAP_SIZE, masterRef.current!, () => new HeatmapEngine(radius));
+          const cube = grid.cubes[0][0]!;
           // Injection de la donnée Terrain dans la Face 2 (Contexte)
           cube.faces[1].set(floatData);
           return cube;
         } catch (e) {
           console.error("Failed to load tensor", filename, e);
-          return sdk.current!.createCube(engineName, MAP_SIZE, new HeatmapEngine(radius));
+          const fallbackGrid = new HypercubeGrid(1, 1, MAP_SIZE, masterRef.current!, () => new HeatmapEngine(radius));
+          return fallbackGrid.cubes[0][0]!;
         }
       };
 
       const [vegCube, transCube, shopCube] = await Promise.all([
-        loadTensor('vegetation', 'Vegetation', layers.vegetation.radius),
-        loadTensor('transports', 'Transports', layers.transports.radius),
-        loadTensor('commerces', 'Commerces', layers.commerces.radius)
+        loadTensor('vegetation', layers.vegetation.radius),
+        loadTensor('transports', layers.transports.radius),
+        loadTensor('commerces', layers.commerces.radius)
       ]);
 
       setLayers(prev => ({
@@ -83,7 +83,7 @@ export function GeoAnalyzer() {
   const requestSynthesis = useRef<number | null>(null);
 
   useEffect(() => {
-    if (loading || !sdk.current) return;
+    if (loading || !masterRef.current) return;
 
     if (requestSynthesis.current) clearTimeout(requestSynthesis.current);
 
@@ -125,7 +125,7 @@ export function GeoAnalyzer() {
 
       setFinalHotspotMap(mergedFaces);
       setStats({
-        vram: (sdk.current as any).masterBuffer.getUsedMemoryInMB(),
+        vram: masterRef.current!.getUsedMemoryInMB(),
         computeMs: performance.now() - s
       });
 
@@ -159,7 +159,7 @@ export function GeoAnalyzer() {
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
 
-        <TriadeLayerV2
+        <HypercubeLayer
           faceData={finalHotspotMap}
           mapSize={MAP_SIZE}
           bounds={PARIS_BOUNDS}
@@ -289,3 +289,5 @@ export function GeoAnalyzer() {
     </div>
   );
 }
+
+

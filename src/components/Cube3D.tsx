@@ -87,3 +87,5 @@ export const Cube3D: React.FC<Cube3DProps> = ({ facesData, width, height, rotati
         </div>
     );
 };
+
+

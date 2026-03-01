@@ -1,15 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Triade } from '../triade-engine-v2/Triade';
-import { GameOfLifeEngine } from '../triade-engine-v2/engines/GameOfLifeEngine';
-import { CanvasAdapter } from '../triade-engine-v2/io/CanvasAdapter';
-import { WebGLAdapter } from '../triade-engine-v2/io/WebGLAdapter';
-import { TriadeGrid } from '../triade-engine-v2/core/TriadeGrid';
+import { HypercubeMasterBuffer, HypercubeGrid, GameOfLifeEngine, CanvasAdapter, WebGLAdapter } from 'hypercube-compute';
 
 interface LabProps {
     onClose: () => void;
 }
 
-export const TriadeCubeLab: React.FC<LabProps> = ({ onClose }) => {
+export const HypercubeLab: React.FC<LabProps> = ({ onClose }) => {
     const [viewMode, setViewMode] = useState<'SINGLE' | 'GRID' | 'WEBGL'>('WEBGL');
     const [fps, setFps] = useState(0);
 
@@ -22,17 +18,17 @@ export const TriadeCubeLab: React.FC<LabProps> = ({ onClose }) => {
     ];
 
     // Engine / SDK
-    const sdkRef = useRef<Triade | null>(null);
+    const masterRef = useRef<HypercubeMasterBuffer | null>(null);
     const webglAdapterRef = useRef<WebGLAdapter | null>(null);
 
     useEffect(() => {
         // Initialization
-        const sdk = new Triade(10); // 10MB minimal usage
-        sdkRef.current = sdk;
+        const master = new HypercubeMasterBuffer();
+        masterRef.current = master;
 
         // 1. Initialiser la grille (2 cols x 2 rows = 4 cubes) avec le Game of Life
         const size = 128;
-        const grid = new TriadeGrid(2, 2, size, sdk.masterBuffer, () => new GameOfLifeEngine(), 2);
+        const grid = new HypercubeGrid(2, 2, size, master, () => new GameOfLifeEngine(), 2);
 
         // 2. Initialisation : dessiner une forme continue au milieu de la grille globale
         // On va allumer un "Gosper Glider Gun" (ou un gros amas aléatoire) au centre absolu.
@@ -129,7 +125,7 @@ export const TriadeCubeLab: React.FC<LabProps> = ({ onClose }) => {
             <header style={{ padding: '20px', backgroundColor: '#18181b', borderBottom: '1px solid #27272a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                     <button onClick={onClose} style={{ backgroundColor: 'transparent', color: '#a1a1aa', border: '1px solid #3f3f46', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer' }}>← Quitter</button>
-                    <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>TriadeCube API & UI Standard</h1>
+                    <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>HypercubeCube API & UI Standard</h1>
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -175,9 +171,9 @@ export const TriadeCubeLab: React.FC<LabProps> = ({ onClose }) => {
 
             {/* DOCUMENTATION FOOTER */}
             <footer style={{ padding: '20px', borderTop: '1px solid #27272a', color: '#a1a1aa', fontSize: '14px', lineHeight: '1.6' }}>
-                <strong>Comment utiliser l'API TriadeCube dans vos projets ?</strong><br />
-                La philosophie de Triade repose sur le "Flat Memory Model". Que ce soit pour une simple page web, un jeu vidéo ou de la Big Data, l'architecture est la suivante :<br />
-                <code style={{ color: '#f472b6' }}>1. const sdk = new Triade(Megabytes);</code><br />
+                <strong>Comment utiliser l'API HypercubeCube dans vos projets ?</strong><br />
+                La philosophie de Hypercube repose sur le "Flat Memory Model". Que ce soit pour une simple page web, un jeu vidéo ou de la Big Data, l'architecture est la suivante :<br />
+                <code style={{ color: '#f472b6' }}>1. const sdk = new Hypercube(Megabytes);</code><br />
                 <code style={{ color: '#f472b6' }}>2. const cube = sdk.createCube(size, new MyPhysicsEngine()); // Vos règles</code><br />
                 <code style={{ color: '#f472b6' }}>3. cube.compute(); // A chaque tic</code><br />
                 <code style={{ color: '#6ee7b7' }}>4. WebGLAdapter.render( cube.faces[0] ); // Envoi direct O(1) de la RAM au GPU sans stringify ni JSON.</code>
@@ -197,3 +193,5 @@ const btnStyle = (active: boolean): React.CSSProperties => ({
     fontWeight: active ? 'bold' : 'normal',
     transition: '0.2s'
 });
+
+

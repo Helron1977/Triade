@@ -1,6 +1,6 @@
-# L'Architecture Mathématique du Triade Engine
+# L'Architecture Mathématique du Hypercube Engine
 
-Le "Triade Engine" repose sur un concept fondamental : décomposer l'analyse d'un espace 2D complexe en **6 couches de mémoire contiguës**, appelées les "Faces" d'un cube virtuel. Plutôt que de calculer des interactions d'objet à objet (agents, bâtiments), le moteur calcule des équations de **champs scalaires** de cellule à cellule.
+Le "Hypercube Engine" repose sur un concept fondamental : décomposer l'analyse d'un espace 2D complexe en **6 couches de mémoire contiguës**, appelées les "Faces" d'un cube virtuel. Plutôt que de calculer des interactions d'objet à objet (agents, bâtiments), le moteur calcule des équations de **champs scalaires** de cellule à cellule.
 
 Chaque Face est un tableau natif à une dimension de taille $N = Largeur \times Hauteur$ (`Float32Array`). Le passage d'une face à l'autre est une opération mathématique stricte.
 
@@ -122,7 +122,7 @@ $$Face6(GradientX) = ...$$
 
 ---
 
-Le "Cube Triade" n'est rien d'autre qu'un **pipeline d'équations scalaires figé dans une topologie mémoire optimisée pour écraser les boucles algorithmiques classiques de Javascript**.
+Le "Cube Hypercube" n'est rien d'autre qu'un **pipeline d'équations scalaires figé dans une topologie mémoire optimisée pour écraser les boucles algorithmiques classiques de Javascript**.
 
 Ce diagramme illustre l'empilement vertical (Z-Stack) des 6 couches de mémoire et le flux de données cyclique qui traverse ces "Faces".
 
@@ -180,4 +180,6 @@ sequenceDiagram
         F4->>App: Retour des Flags (Pathfinding, UI)
     end
 ```
+
+
 

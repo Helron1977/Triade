@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Triade } from '../triade-engine-v2/Triade';
-import { OceanWorld } from '../triade-engine-v2/addons/ocean-simulation/OceanWorld';
-import { OceanWebGLRenderer } from '../triade-engine-v2/addons/ocean-simulation/OceanWebGLRenderer';
+import { HypercubeMasterBuffer } from 'hypercube-compute';
+import { OceanWorld } from '../addons/ocean-simulation/OceanWorld';
+import { OceanWebGLRenderer } from '../addons/ocean-simulation/OceanWebGLRenderer';
 import { Link } from 'react-router-dom';
 
 export const OceanSimulator = () => {
@@ -13,7 +13,7 @@ export const OceanSimulator = () => {
     const webglCanvasRef = useRef<HTMLCanvasElement>(null);
     const boatOverlayRef = useRef<HTMLCanvasElement>(null);
 
-    const sdkRef = useRef<Triade | null>(null);
+    const masterRef = useRef<HypercubeMasterBuffer | null>(null);
 
     // Structure unique "OceanWorld" qui gère la Grille et les Bateaux Toriques
     const worldRef = useRef<OceanWorld | null>(null);
@@ -21,14 +21,14 @@ export const OceanSimulator = () => {
 
     useEffect(() => {
         // Initialization (Larger Map: 4x4 chunks)
-        const sdk = new Triade(160); // Upgrade RAM for 16 chunks
-        sdkRef.current = sdk;
+        const master = new HypercubeMasterBuffer();
+        masterRef.current = master;
 
         const size = 64;
         const cols = 4;
         const rows = 4;
 
-        const world = new OceanWorld(sdk.masterBuffer, cols, rows, size);
+        const world = new OceanWorld(master, cols, rows, size);
         worldRef.current = world;
 
         if (webglCanvasRef.current) {
@@ -375,3 +375,5 @@ export const OceanSimulator = () => {
         </div>
     );
 };
+
+

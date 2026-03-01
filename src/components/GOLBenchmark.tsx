@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Triade } from '../triade-engine-v2/Triade';
-import { EcosystemEngineO1 } from '../triade-engine-v2/engines/EcosystemEngineO1';
+import { HypercubeMasterBuffer, HypercubeGrid, EcosystemEngineO1 } from 'hypercube-compute';
 
 const MAP_SIZE = 1000; // 1 Million de cellules (1000x1000 Tensor)
 
@@ -12,7 +11,8 @@ export const GOLBenchmark: React.FC<Props> = ({ onClose }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [stats, setStats] = useState({ fps: 0, computeMs: 0 });
     const frameId = useRef<number>(0);
-    const sdkRef = useRef<Triade | null>(null);
+    const masterRef = useRef<HypercubeMasterBuffer | null>(null);
+    const gridRef = useRef<HypercubeGrid | null>(null);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -20,18 +20,12 @@ export const GOLBenchmark: React.FC<Props> = ({ onClose }) => {
         const ctx = canvas.getContext('2d', { alpha: false });
         if (!ctx) return;
 
-        if (!sdkRef.current) {
-            sdkRef.current = new Triade(100);
+        if (!masterRef.current) {
+            masterRef.current = new HypercubeMasterBuffer();
+            gridRef.current = new HypercubeGrid(1, 1, MAP_SIZE, masterRef.current, () => new EcosystemEngineO1(), 2);
         }
-        const sdk = sdkRef.current;
-
-        let cube;
-        try {
-            cube = sdk.createCube('EcosystemO1', MAP_SIZE, new EcosystemEngineO1());
-        } catch (e) {
-            console.warn("Utilisation du cube existant", e);
-            cube = (sdk as any).cubes.get('EcosystemO1') || sdk.createCube('EcosystemO1_2', MAP_SIZE, new EcosystemEngineO1());
-        }
+        const grid = gridRef.current!;
+        const cube = grid.cubes[0][0]!;
 
         const face1 = cube.faces[1];
         for (let i = 0; i < face1.length; i++) {
@@ -48,7 +42,7 @@ export const GOLBenchmark: React.FC<Props> = ({ onClose }) => {
 
         const loop = () => {
             const startCompute = performance.now();
-            cube.compute();
+            grid.compute();
             const computeTime = performance.now() - startCompute;
             avgCompute = avgCompute * 0.9 + computeTime * 0.1;
 
@@ -116,3 +110,5 @@ export const GOLBenchmark: React.FC<Props> = ({ onClose }) => {
         </div>
     );
 };
+
+
